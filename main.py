@@ -20,6 +20,7 @@ templates = Jinja2Templates(directory="templates")
 
 # ---------- Load Existing Sessions on Startup ----------
 async def load_sessions():
+    global clients
     for filename in os.listdir("sessions"):
         if filename.endswith(".db"):
             phone = filename.replace(".db", "")
@@ -67,6 +68,7 @@ async def login_post(request: Request, phone: str = Form(...)):
 # ---------- Verify ----------
 @app.post("/verify")
 async def verify(request: Request, phone: str = Form(...), code: str = Form(...), password: str = Form(None)):
+    global active_account
     client = clients.get(phone)
     if not client:
         return HTMLResponse(content="No client found!", status_code=400)
@@ -83,6 +85,9 @@ async def verify(request: Request, phone: str = Form(...), code: str = Form(...)
                 return HTMLResponse(content=f"Error verifying password: {e2}", status_code=400)
         else:
             return HTMLResponse(content=f"Error verifying code: {e}", status_code=400)
+
+    # set as active after login
+    active_account = phone
 
     return RedirectResponse(url="/", status_code=303)
 
@@ -135,14 +140,13 @@ async def switch_account(phone: str):
     return {"message": f"Switched to {phone}"}
 
 
-# ---------- Messages for Active Account ----------
-@app.get("/messages")
-async def get_messages():
-    global active_account
-    if not active_account or active_account not in clients:
-        return JSONResponse({"error": "No active account"}, status_code=400)
+# ---------- Messages ----------
+@app.get("/messages/{phone}")
+async def get_messages(phone: str):
+    if phone not in clients:
+        return JSONResponse({"error": "Account not found"}, status_code=400)
 
-    client = clients[active_account]
+    client = clients[phone]
     if not client.is_connected():
         await client.connect()
 
@@ -151,9 +155,16 @@ async def get_messages():
     for d in dialogs:
         messages = []
         async for m in client.iter_messages(d.id, limit=5):
+            sender_name = None
+            try:
+                if m.sender:
+                    sender_name = m.sender.first_name or m.sender.username or str(m.sender_id)
+            except:
+                sender_name = str(m.sender_id)
+
             messages.append({
                 "id": m.id,
-                "sender": m.sender_id,
+                "sender": sender_name,
                 "text": m.text
             })
         chats.append({
@@ -162,4 +173,4 @@ async def get_messages():
             "messages": messages
         })
 
-    return {"phone": active_account, "chats": chats}
+    return {"phone": phone, "chats": chats}
