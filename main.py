@@ -66,17 +66,16 @@ async def verify(request: Request, phone: str = Form(...), code: str = Form(...)
 
     try:
         await client.sign_in(phone, code)
-    except SessionPasswordNeededError:
-        # If 2FA is enabled
-        if not password:
-            # ask password in HTML
-            return templates.TemplateResponse("password.html", {"request": request, "phone": phone, "code": code})
-        try:
-            await client.sign_in(password=password)
-        except Exception as e:
-            return HTMLResponse(content=f"Error verifying password: {e}", status_code=400)
     except Exception as e:
-        return HTMLResponse(content=f"Error verifying code: {e}", status_code=400)
+        if "PASSWORD" in str(e).upper():
+            if not password:
+                return HTMLResponse(content="Password required for 2FA!", status_code=400)
+            try:
+                await client.sign_in(password=password)
+            except Exception as e2:
+                return HTMLResponse(content=f"Error verifying password: {e2}", status_code=400)
+        else:
+            return HTMLResponse(content=f"Error verifying code: {e}", status_code=400)
 
     return RedirectResponse(url="/", status_code=303)
 
