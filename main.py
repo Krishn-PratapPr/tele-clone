@@ -6,8 +6,8 @@ import os, asyncio
 app = Flask(__name__)
 app.secret_key = "super-secret-key"
 
-API_ID = int(os.getenv("25451424"))
-API_HASH = os.getenv("5ffa3a0c51f76201274a5a21fceb3f07")
+API_ID = int(os.getenv("API_ID"))      # name of the variable, not the value
+API_HASH = os.getenv("API_HASH")
 
 clients = {}  # phone -> TelegramClient
 
