@@ -1,13 +1,10 @@
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from telethon import TelegramClient
 from telethon.sessions import SQLiteSession
-from telethon.errors import SessionPasswordNeededError
 import os
 import asyncio
-from fastapi.responses import JSONResponse
-from telethon.tl.types import PeerUser, PeerChat, PeerChannel
 
 app = FastAPI()
 
@@ -15,11 +12,13 @@ API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 
 clients = {}  # phone -> TelegramClient
-os.makedirs("sessions", exist_ok=True)
+active_account = None  # Track current active account
 
+os.makedirs("sessions", exist_ok=True)
 templates = Jinja2Templates(directory="templates")
 
 
+# ---------- Load Existing Sessions on Startup ----------
 async def load_sessions():
     for filename in os.listdir("sessions"):
         if filename.endswith(".db"):
@@ -35,11 +34,16 @@ async def startup_event():
     asyncio.create_task(load_sessions())
 
 
+# ---------- Home ----------
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "accounts": list(clients.keys())})
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "accounts": list(clients.keys()), "active": active_account},
+    )
 
 
+# ---------- Login ----------
 @app.get("/login", response_class=HTMLResponse)
 async def login_get(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
@@ -60,6 +64,7 @@ async def login_post(request: Request, phone: str = Form(...)):
     return templates.TemplateResponse("code.html", {"request": request, "phone": phone})
 
 
+# ---------- Verify ----------
 @app.post("/verify")
 async def verify(request: Request, phone: str = Form(...), code: str = Form(...), password: str = Form(None)):
     client = clients.get(phone)
@@ -82,12 +87,14 @@ async def verify(request: Request, phone: str = Form(...), code: str = Form(...)
     return RedirectResponse(url="/", status_code=303)
 
 
+# ---------- Send Message ----------
 @app.post("/send")
-async def send(request: Request, phone: str = Form(...), target: str = Form(...), message: str = Form(...)):
-    client = clients.get(phone)
-    if not client:
-        return HTMLResponse(content="No client found!", status_code=400)
+async def send(request: Request, target: str = Form(...), message: str = Form(...)):
+    global active_account
+    if not active_account or active_account not in clients:
+        return HTMLResponse(content="No active account!", status_code=400)
 
+    client = clients[active_account]
     try:
         await client.send_message(target, message)
     except Exception as e:
@@ -96,6 +103,7 @@ async def send(request: Request, phone: str = Form(...), target: str = Form(...)
     return RedirectResponse(url="/", status_code=303)
 
 
+# ---------- Logout ----------
 @app.get("/logout/{phone}")
 async def logout(phone: str):
     client = clients.pop(phone, None)
@@ -105,13 +113,18 @@ async def logout(phone: str):
         except Exception as e:
             return HTMLResponse(content=f"Error logging out: {e}", status_code=400)
 
+    global active_account
+    if active_account == phone:
+        active_account = None
+
     return RedirectResponse(url="/", status_code=303)
 
-active_account = None  # track current account
 
+# ---------- Account Management ----------
 @app.get("/accounts")
 async def get_accounts():
     return {"accounts": list(clients.keys()), "active": active_account}
+
 
 @app.get("/switch/{phone}")
 async def switch_account(phone: str):
@@ -121,13 +134,19 @@ async def switch_account(phone: str):
     active_account = phone
     return {"message": f"Switched to {phone}"}
 
-@app.get("/messages/{phone}")
-async def get_messages(phone: str):
-    client = clients.get(phone)
-    if not client or not client.is_connected():
-        return JSONResponse({"error": "Client not active"}, status_code=400)
 
-    dialogs = await client.get_dialogs(limit=10)  # recent 10 chats
+# ---------- Messages for Active Account ----------
+@app.get("/messages")
+async def get_messages():
+    global active_account
+    if not active_account or active_account not in clients:
+        return JSONResponse({"error": "No active account"}, status_code=400)
+
+    client = clients[active_account]
+    if not client.is_connected():
+        await client.connect()
+
+    dialogs = await client.get_dialogs(limit=10)
     chats = []
     for d in dialogs:
         messages = []
@@ -143,4 +162,4 @@ async def get_messages(phone: str):
             "messages": messages
         })
 
-    return {"phone": phone, "chats": chats}
+    return {"phone": active_account, "chats": chats}

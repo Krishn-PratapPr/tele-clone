@@ -2,13 +2,24 @@
 <html>
 <head>
     <title>Telegram Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #accounts button { margin: 5px; padding: 8px 12px; }
+        #messages { margin-top: 20px; }
+        .chat { border: 1px solid #ccc; margin-bottom: 15px; padding: 10px; border-radius: 8px; }
+        .chat h3 { margin: 0 0 10px 0; }
+        .chat p { margin: 5px 0; }
+    </style>
     <script>
         async function loadAccounts() {
             let res = await fetch("/accounts");
             let data = await res.json();
             let list = document.getElementById("accounts");
             list.innerHTML = "";
+
             data.accounts.forEach(acc => {
+                let wrapper = document.createElement("div");
+
                 let btn = document.createElement("button");
                 btn.innerText = acc + (acc === data.active ? " ✅" : "");
                 btn.onclick = async () => {
@@ -16,7 +27,19 @@
                     loadAccounts();
                     loadMessages(acc);
                 };
-                list.appendChild(btn);
+                wrapper.appendChild(btn);
+
+                let logoutBtn = document.createElement("button");
+                logoutBtn.innerText = "Logout";
+                logoutBtn.style.marginLeft = "10px";
+                logoutBtn.onclick = async () => {
+                    await fetch("/logout/" + acc);
+                    loadAccounts();
+                    document.getElementById("messages").innerHTML = "";
+                };
+                wrapper.appendChild(logoutBtn);
+
+                list.appendChild(wrapper);
             });
         }
 
@@ -25,16 +48,34 @@
             let data = await res.json();
             let box = document.getElementById("messages");
             box.innerHTML = "";
+
+            if (!data.chats || data.chats.length === 0) {
+                box.innerHTML = "<p>No messages found for this account.</p>";
+                return;
+            }
+
             data.chats.forEach(chat => {
                 let div = document.createElement("div");
-                div.innerHTML = "<h3>" + chat.title + "</h3>";
+                div.className = "chat";
+
+                let title = document.createElement("h3");
+                title.innerText = chat.title;
+                div.appendChild(title);
+
                 chat.messages.forEach(m => {
                     let p = document.createElement("p");
                     p.innerText = m.sender + ": " + (m.text || "[no text]");
                     div.appendChild(p);
                 });
+
                 box.appendChild(div);
             });
+
+            // Add refresh button
+            let refreshBtn = document.createElement("button");
+            refreshBtn.innerText = "🔄 Refresh Messages";
+            refreshBtn.onclick = () => loadMessages(phone);
+            box.prepend(refreshBtn);
         }
 
         window.onload = () => { loadAccounts(); };
