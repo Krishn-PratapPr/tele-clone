@@ -7,7 +7,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-key")
 
 API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH"))
+API_HASH = os.getenv("API_HASH")
 
 clients = {}  # phone -> TelegramClient
 os.makedirs("sessions", exist_ok=True)
