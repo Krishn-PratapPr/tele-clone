@@ -1,17 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Verify Code</title>
+    <title>Enter Code</title>
 </head>
 <body>
-    <h1>Enter Verification Code</h1>
-    <form action="/verify" method="post">
+    <h2>Enter the code sent to {{ phone }}</h2>
+    <form method="post" action="/verify">
         <input type="hidden" name="phone" value="{{ phone }}">
         <label>Code:</label>
-        <input type="text" name="code" required>
+        <input type="text" name="code" required><br><br>
+        <label>Password (if 2FA enabled):</label>
+        <input type="password" name="password"><br><br>
         <button type="submit">Verify</button>
     </form>
-    <a href="/">Back to Home</a>
 </body>
 </html>

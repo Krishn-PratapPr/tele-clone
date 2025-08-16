@@ -17,16 +17,20 @@ os.makedirs("sessions", exist_ok=True)
 templates = Jinja2Templates(directory="templates")
 
 
+# Load existing sessions on startup
 async def load_sessions():
     for filename in os.listdir("sessions"):
         if filename.endswith(".db"):
             phone = filename.replace(".db", "")
             client = TelegramClient(SQLiteSession(f"sessions/{phone}.db"), API_ID, API_HASH)
             await client.connect()
-            clients[phone] = client
+            if await client.is_user_authorized():
+                clients[phone] = client
+                print(f"Loaded session for {phone}")
+            else:
+                await client.disconnect()
 
 
-# Run session loader on startup
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(load_sessions())
@@ -46,9 +50,9 @@ async def login_get(request: Request):
 async def login_post(request: Request, phone: str = Form(...)):
     session_path = f"sessions/{phone}.db"
     client = TelegramClient(SQLiteSession(session_path), API_ID, API_HASH)
+    await client.connect()
     clients[phone] = client
 
-    await client.connect()
     try:
         await client.send_code_request(phone)
     except Exception as e:
@@ -57,22 +61,36 @@ async def login_post(request: Request, phone: str = Form(...)):
     return templates.TemplateResponse("code.html", {"request": request, "phone": phone})
 
 
-@app.post("/verify")
-async def verify(request: Request, phone: str = Form(...), code: str = Form(...)):
+@app.post("/verify", response_class=HTMLResponse)
+async def verify(
+    request: Request,
+    phone: str = Form(...),
+    code: str = Form(...),
+    password: str = Form(None)  # optional for 2FA
+):
     client = clients.get(phone)
     if not client:
         return HTMLResponse(content="No client found!", status_code=400)
 
     try:
-        await client.sign_in(phone, code)
+        if password:
+            # Handle 2FA login
+            await client.sign_in(password=password)
+        else:
+            await client.sign_in(phone, code)
     except Exception as e:
         return HTMLResponse(content=f"Error verifying code: {e}", status_code=400)
 
     return RedirectResponse(url="/", status_code=303)
 
 
-@app.post("/send")
-async def send(request: Request, phone: str = Form(...), target: str = Form(...), message: str = Form(...)):
+@app.post("/send", response_class=HTMLResponse)
+async def send(
+    request: Request,
+    phone: str = Form(...),
+    target: str = Form(...),
+    message: str = Form(...)
+):
     client = clients.get(phone)
     if not client:
         return HTMLResponse(content="No client found!", status_code=400)
@@ -91,6 +109,7 @@ async def logout(phone: str):
     if client:
         try:
             await client.log_out()
+            await client.disconnect()
         except Exception as e:
             return HTMLResponse(content=f"Error logging out: {e}", status_code=400)
 
