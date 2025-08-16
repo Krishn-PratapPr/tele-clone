@@ -4,9 +4,9 @@ from telethon.sessions import SQLiteSession
 import os, asyncio
 
 app = Flask(__name__)
-app.secret_key = "super-secret-key"
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-key")
 
-API_ID = int(os.getenv("API_ID"))      # name of the variable, not the value
+API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 
 clients = {}  # phone -> TelegramClient
@@ -20,19 +20,16 @@ async def home():
     return render_template("index.html", accounts=list(clients.keys()))
 
 
-# Step 1: Enter phone number
 @app.route("/login", methods=["GET", "POST"])
 async def login():
     if request.method == "POST":
         phone = request.form["phone"]
-
-        # Use SQLite session for persistence
         session_path = f"sessions/{phone}.db"
         client = TelegramClient(SQLiteSession(session_path), API_ID, API_HASH)
         clients[phone] = client
 
-        await client.connect()
         try:
+            await client.connect()
             await client.send_code_request(phone)
         except Exception as e:
             return f"Error sending code: {e}", 400
@@ -42,7 +39,6 @@ async def login():
     return render_template("login.html")
 
 
-# Step 2: Enter OTP
 @app.route("/verify", methods=["POST"])
 async def verify():
     phone = request.form["phone"]
@@ -60,7 +56,6 @@ async def verify():
     return redirect(url_for("home"))
 
 
-# Send message from an account
 @app.route("/send", methods=["POST"])
 async def send():
     phone = request.form["phone"]
@@ -79,7 +74,6 @@ async def send():
     return redirect(url_for("home"))
 
 
-# Logout
 @app.route("/logout/<phone>")
 async def logout(phone):
     client = clients.pop(phone, None)
@@ -100,10 +94,12 @@ async def load_sessions():
             await client.connect()
             clients[phone] = client
 
-# Run the load_sessions before starting Flask
+# Run load_sessions before Flask starts
 loop = asyncio.get_event_loop()
 loop.run_until_complete(load_sessions())
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    # Use Uvicorn to serve async routes
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), reload=True)
