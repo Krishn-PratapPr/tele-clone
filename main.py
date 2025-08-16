@@ -7,12 +7,24 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-key")
 
 API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
+API_HASH = os.getenv("API_HASH"))
 
 clients = {}  # phone -> TelegramClient
-
-# Ensure sessions folder exists
 os.makedirs("sessions", exist_ok=True)
+
+
+async def load_sessions():
+    for filename in os.listdir("sessions"):
+        if filename.endswith(".db"):
+            phone = filename.replace(".db", "")
+            client = TelegramClient(SQLiteSession(f"sessions/{phone}.db"), API_ID, API_HASH)
+            await client.connect()
+            clients[phone] = client
+
+# Schedule session loading on first request
+@app.before_first_request
+def before_first_request_func():
+    asyncio.create_task(load_sessions())
 
 
 @app.route("/")
@@ -28,8 +40,8 @@ async def login():
         client = TelegramClient(SQLiteSession(session_path), API_ID, API_HASH)
         clients[phone] = client
 
+        await client.connect()
         try:
-            await client.connect()
             await client.send_code_request(phone)
         except Exception as e:
             return f"Error sending code: {e}", 400
@@ -44,15 +56,12 @@ async def verify():
     phone = request.form["phone"]
     code = request.form["code"]
     client = clients.get(phone)
-
     if not client:
         return "No client found!", 400
-
     try:
         await client.sign_in(phone, code)
     except Exception as e:
         return f"Error verifying code: {e}", 400
-
     return redirect(url_for("home"))
 
 
@@ -83,23 +92,3 @@ async def logout(phone):
         except Exception as e:
             return f"Error logging out: {e}", 400
     return redirect(url_for("home"))
-
-
-# Load existing SQLite sessions on startup
-async def load_sessions():
-    for filename in os.listdir("sessions"):
-        if filename.endswith(".db"):
-            phone = filename.replace(".db", "")
-            client = TelegramClient(SQLiteSession(f"sessions/{phone}.db"), API_ID, API_HASH)
-            await client.connect()
-            clients[phone] = client
-
-# Run load_sessions before Flask starts
-loop = asyncio.get_event_loop()
-loop.run_until_complete(load_sessions())
-
-
-if __name__ == "__main__":
-    # Use Uvicorn to serve async routes
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), reload=True)
