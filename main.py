@@ -1,16 +1,20 @@
-from flask import Flask, render_template, request, redirect, url_for
+from fastapi import FastAPI, Request, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 from telethon import TelegramClient
 from telethon.sessions import SQLiteSession
-import os, asyncio
+import os
+import asyncio
 
-app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-key")
+app = FastAPI()
 
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 
 clients = {}  # phone -> TelegramClient
 os.makedirs("sessions", exist_ok=True)
+
+templates = Jinja2Templates(directory="templates")
 
 
 async def load_sessions():
@@ -21,74 +25,73 @@ async def load_sessions():
             await client.connect()
             clients[phone] = client
 
-# Schedule session loading on first request
-@app.before_first_request
-def before_first_request_func():
+
+# Run session loader on startup
+@app.on_event("startup")
+async def startup_event():
     asyncio.create_task(load_sessions())
 
 
-@app.route("/")
-async def home():
-    return render_template("index.html", accounts=list(clients.keys()))
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request, "accounts": list(clients.keys())})
 
 
-@app.route("/login", methods=["GET", "POST"])
-async def login():
-    if request.method == "POST":
-        phone = request.form["phone"]
-        session_path = f"sessions/{phone}.db"
-        client = TelegramClient(SQLiteSession(session_path), API_ID, API_HASH)
-        clients[phone] = client
-
-        await client.connect()
-        try:
-            await client.send_code_request(phone)
-        except Exception as e:
-            return f"Error sending code: {e}", 400
-
-        return render_template("code.html", phone=phone)
-
-    return render_template("login.html")
+@app.get("/login", response_class=HTMLResponse)
+async def login_get(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
 
 
-@app.route("/verify", methods=["POST"])
-async def verify():
-    phone = request.form["phone"]
-    code = request.form["code"]
+@app.post("/login", response_class=HTMLResponse)
+async def login_post(request: Request, phone: str = Form(...)):
+    session_path = f"sessions/{phone}.db"
+    client = TelegramClient(SQLiteSession(session_path), API_ID, API_HASH)
+    clients[phone] = client
+
+    await client.connect()
+    try:
+        await client.send_code_request(phone)
+    except Exception as e:
+        return HTMLResponse(content=f"Error sending code: {e}", status_code=400)
+
+    return templates.TemplateResponse("code.html", {"request": request, "phone": phone})
+
+
+@app.post("/verify")
+async def verify(request: Request, phone: str = Form(...), code: str = Form(...)):
     client = clients.get(phone)
     if not client:
-        return "No client found!", 400
+        return HTMLResponse(content="No client found!", status_code=400)
+
     try:
         await client.sign_in(phone, code)
     except Exception as e:
-        return f"Error verifying code: {e}", 400
-    return redirect(url_for("home"))
+        return HTMLResponse(content=f"Error verifying code: {e}", status_code=400)
+
+    return RedirectResponse(url="/", status_code=303)
 
 
-@app.route("/send", methods=["POST"])
-async def send():
-    phone = request.form["phone"]
-    target = request.form["target"]
-    message = request.form["message"]
-
+@app.post("/send")
+async def send(request: Request, phone: str = Form(...), target: str = Form(...), message: str = Form(...)):
     client = clients.get(phone)
     if not client:
-        return "No client found!", 400
+        return HTMLResponse(content="No client found!", status_code=400)
 
     try:
         await client.send_message(target, message)
     except Exception as e:
-        return f"Error sending message: {e}", 400
+        return HTMLResponse(content=f"Error sending message: {e}", status_code=400)
 
-    return redirect(url_for("home"))
+    return RedirectResponse(url="/", status_code=303)
 
 
-@app.route("/logout/<phone>")
-async def logout(phone):
+@app.get("/logout/{phone}")
+async def logout(phone: str):
     client = clients.pop(phone, None)
     if client:
         try:
             await client.log_out()
         except Exception as e:
-            return f"Error logging out: {e}", 400
-    return redirect(url_for("home"))
+            return HTMLResponse(content=f"Error logging out: {e}", status_code=400)
+
+    return RedirectResponse(url="/", status_code=303)

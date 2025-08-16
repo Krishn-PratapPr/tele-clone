@@ -1,14 +1,17 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Enter OTP</title>
+    <meta charset="UTF-8">
+    <title>Verify Code</title>
 </head>
 <body>
-  <h2>Enter OTP for {{ phone }}</h2>
-  <form method="POST" action="/verify">
-    <input type="hidden" name="phone" value="{{ phone }}">
-    <input type="text" name="code" placeholder="Telegram Code" required>
-    <button type="submit">Verify</button>
-  </form>
+    <h1>Enter Verification Code</h1>
+    <form action="/verify" method="post">
+        <input type="hidden" name="phone" value="{{ phone }}">
+        <label>Code:</label>
+        <input type="text" name="code" required>
+        <button type="submit">Verify</button>
+    </form>
+    <a href="/">Back to Home</a>
 </body>
 </html>
