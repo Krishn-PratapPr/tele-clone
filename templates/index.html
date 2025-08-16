@@ -1,115 +1,53 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Telegram Multi-Account Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <title>Telegram Dashboard</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
-        .header { display: flex; justify-content: space-between; align-items: center; }
-        .accounts { margin-top: 10px; }
-        .messages { margin-top: 20px; border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: scroll; }
-        .message { padding: 5px; border-bottom: 1px solid #eee; }
-        button { margin: 5px; }
+        #accounts button { margin: 5px; padding: 8px 12px; }
+        #messages { margin-top: 20px; }
+        .chat { border: 1px solid #ccc; margin-bottom: 15px; padding: 10px; border-radius: 8px; }
+        .chat h3 { margin: 0 0 10px 0; }
+        .chat p { margin: 5px 0; }
     </style>
+    <script>
+       async function loadMessages(phone) {
+    let res = await fetch("/messages/" + phone);
+    let data = await res.json();
+    let box = document.getElementById("messages");
+    box.innerHTML = "";
+
+    if (!data.chats || data.chats.length === 0) {
+        box.innerHTML = "<p>No messages found for this account.</p>";
+        return;
+    }
+
+    data.chats.forEach(chat => {
+        let div = document.createElement("div");
+        div.className = "chat";
+
+        let title = document.createElement("h3");
+        title.innerText = chat.title;
+        div.appendChild(title);
+
+        chat.messages.forEach(m => {
+            let p = document.createElement("p");
+            p.innerText = (m.sender || "Unknown") + ": " + (m.text || "[no text]");
+            div.appendChild(p);
+        });
+
+        box.appendChild(div);
+    });
+}
+
+
+        window.onload = () => { loadAccounts(); };
+    </script>
 </head>
 <body>
-    <div class="header">
-        <h3>Telegram Multi-Account Dashboard</h3>
-        <div>
-            <button onclick="showAddAccount()">➕ Add Account</button>
-        </div>
-    </div>
-
-    <div class="accounts" id="accounts"></div>
+    <h2>Telegram Multi-Account Dashboard</h2>
+    <div id="accounts"></div>
     <hr>
-
-    <div id="addAccountForm" style="display:none;">
-        <input type="text" id="phone" placeholder="Enter phone number">
-        <button onclick="sendCode()">Send Code</button><br><br>
-        <input type="text" id="code" placeholder="Enter code">
-        <input type="password" id="password" placeholder="2FA password (if any)">
-        <button onclick="verifyCode()">Verify</button>
-    </div>
-
-    <div class="messages" id="messages"></div>
-
-    <script>
-        let activeAccount = null;
-
-        function loadAccounts() {
-            axios.get('/accounts').then(res => {
-                let accountsDiv = document.getElementById("accounts");
-                accountsDiv.innerHTML = "";
-                res.data.forEach(acc => {
-                    let btn = document.createElement("button");
-                    btn.innerText = acc;
-                    btn.onclick = () => switchAccount(acc);
-                    accountsDiv.appendChild(btn);
-
-                    let logoutBtn = document.createElement("button");
-                    logoutBtn.innerText = "Logout";
-                    logoutBtn.onclick = () => logout(acc);
-                    accountsDiv.appendChild(logoutBtn);
-                });
-            });
-        }
-
-        function showAddAccount() {
-            document.getElementById("addAccountForm").style.display = "block";
-        }
-
-        function sendCode() {
-            let phone = document.getElementById("phone").value;
-            axios.post('/send_code', { phone: phone }).then(res => {
-                alert(res.data.message);
-            });
-        }
-
-        function verifyCode() {
-            let phone = document.getElementById("phone").value;
-            let code = document.getElementById("code").value;
-            let password = document.getElementById("password").value;
-            axios.post('/verify_code', { phone: phone, code: code, password: password }).then(res => {
-                alert(res.data.message);
-                loadAccounts();
-            });
-        }
-
-        function switchAccount(phone) {
-            activeAccount = phone;
-            loadMessages();
-        }
-
-        function loadMessages() {
-            if (!activeAccount) return;
-            axios.get('/messages/' + activeAccount).then(res => {
-                let messagesDiv = document.getElementById("messages");
-                messagesDiv.innerHTML = "";
-                res.data.forEach(msg => {
-                    let div = document.createElement("div");
-                    div.className = "message";
-                    div.innerText = msg;
-                    messagesDiv.appendChild(div);
-                });
-            });
-        }
-
-        function logout(phone) {
-            axios.post('/logout', { phone: phone }).then(res => {
-                alert(res.data.message);
-                loadAccounts();
-                if (activeAccount === phone) {
-                    activeAccount = null;
-                    document.getElementById("messages").innerHTML = "";
-                }
-            });
-        }
-
-        // auto-refresh messages for active account
-        setInterval(loadMessages, 5000);
-
-        loadAccounts();
-    </script>
+    <div id="messages"></div>
 </body>
 </html>
