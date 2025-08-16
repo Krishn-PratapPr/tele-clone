@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard</title>
+</head>
+<body>
+  <h2>Accounts</h2>
+  <ul>
+    {% for phone in accounts %}
+      <li>
+        {{ phone }}
+        <form method="POST" action="/send" style="display:inline">
+          <input type="hidden" name="phone" value="{{ phone }}">
+          <input type="text" name="target" placeholder="Username/Phone" required>
+          <input type="text" name="message" placeholder="Message" required>
+          <button type="submit">Send</button>
+        </form>
+        <a href="/logout/{{ phone }}">Logout</a>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <a href="/login">➕ Add Account</a>
+</body>
+</html>

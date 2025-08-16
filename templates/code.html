@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Verify Code</title>
+</head>
+<body>
+  <h2>Enter Code for {{ phone }}</h2>
+  <form method="POST" action="/verify">
+    <input type="hidden" name="phone" value="{{ phone }}">
+    <input type="text" name="code" placeholder="Telegram Code" required>
+    <button type="submit">Verify</button>
+  </form>
+</body>
+</html>
