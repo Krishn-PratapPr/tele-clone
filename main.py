@@ -6,6 +6,8 @@ from telethon.sessions import SQLiteSession
 from telethon.errors import SessionPasswordNeededError
 import os
 import asyncio
+from fastapi.responses import JSONResponse
+from telethon.tl.types import PeerUser, PeerChat, PeerChannel
 
 app = FastAPI()
 
@@ -104,3 +106,41 @@ async def logout(phone: str):
             return HTMLResponse(content=f"Error logging out: {e}", status_code=400)
 
     return RedirectResponse(url="/", status_code=303)
+
+active_account = None  # track current account
+
+@app.get("/accounts")
+async def get_accounts():
+    return {"accounts": list(clients.keys()), "active": active_account}
+
+@app.get("/switch/{phone}")
+async def switch_account(phone: str):
+    global active_account
+    if phone not in clients:
+        return JSONResponse({"error": "Account not found"}, status_code=400)
+    active_account = phone
+    return {"message": f"Switched to {phone}"}
+
+@app.get("/messages/{phone}")
+async def get_messages(phone: str):
+    client = clients.get(phone)
+    if not client or not client.is_connected():
+        return JSONResponse({"error": "Client not active"}, status_code=400)
+
+    dialogs = await client.get_dialogs(limit=10)  # recent 10 chats
+    chats = []
+    for d in dialogs:
+        messages = []
+        async for m in client.iter_messages(d.id, limit=5):
+            messages.append({
+                "id": m.id,
+                "sender": m.sender_id,
+                "text": m.text
+            })
+        chats.append({
+            "chat_id": d.id,
+            "title": d.name or "Unknown",
+            "messages": messages
+        })
+
+    return {"phone": phone, "chats": chats}

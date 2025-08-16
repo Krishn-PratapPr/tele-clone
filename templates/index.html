@@ -1,16 +1,49 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Telegram Accounts</title>
+    <title>Telegram Dashboard</title>
+    <script>
+        async function loadAccounts() {
+            let res = await fetch("/accounts");
+            let data = await res.json();
+            let list = document.getElementById("accounts");
+            list.innerHTML = "";
+            data.accounts.forEach(acc => {
+                let btn = document.createElement("button");
+                btn.innerText = acc + (acc === data.active ? " ✅" : "");
+                btn.onclick = async () => {
+                    await fetch("/switch/" + acc);
+                    loadAccounts();
+                    loadMessages(acc);
+                };
+                list.appendChild(btn);
+            });
+        }
+
+        async function loadMessages(phone) {
+            let res = await fetch("/messages/" + phone);
+            let data = await res.json();
+            let box = document.getElementById("messages");
+            box.innerHTML = "";
+            data.chats.forEach(chat => {
+                let div = document.createElement("div");
+                div.innerHTML = "<h3>" + chat.title + "</h3>";
+                chat.messages.forEach(m => {
+                    let p = document.createElement("p");
+                    p.innerText = m.sender + ": " + (m.text || "[no text]");
+                    div.appendChild(p);
+                });
+                box.appendChild(div);
+            });
+        }
+
+        window.onload = () => { loadAccounts(); };
+    </script>
 </head>
 <body>
-    <h1>Telegram Accounts</h1>
-    <ul>
-        {% for phone in accounts %}
-        <li>{{ phone }} - <a href="/logout/{{ phone }}">Logout</a></li>
-        {% endfor %}
-    </ul>
-    <a href="/login">Add/Login Account</a>
+    <h2>Telegram Multi-Account Dashboard</h2>
+    <div id="accounts"></div>
+    <hr>
+    <div id="messages"></div>
 </body>
 </html>
