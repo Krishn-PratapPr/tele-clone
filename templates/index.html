@@ -1,103 +1,124 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title>Telegram Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        #accounts button { margin: 5px; padding: 6px 10px; }
-        #messages { margin-top: 20px; }
-        .chat { border: 1px solid #ccc; margin-bottom: 15px; padding: 10px; border-radius: 8px; }
-        .chat h3 { margin: 0 0 10px 0; }
-        .chat p { margin: 5px 0; }
-        .top-bar { margin-bottom: 15px; }
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      #accounts button {
+        margin: 5px;
+        padding: 6px 10px;
+      }
+      #messages {
+        margin-top: 20px;
+      }
+      .chat {
+        border: 1px solid #ccc;
+        margin-bottom: 15px;
+        padding: 10px;
+        border-radius: 8px;
+      }
+      .chat h3 {
+        margin: 0 0 10px 0;
+      }
+      .chat p {
+        margin: 5px 0;
+      }
+      .top-bar {
+        margin-bottom: 15px;
+      }
     </style>
     <script>
-        async function loadAccounts() {
-            let res = await fetch("/accounts");
-            let data = await res.json();
-            let box = document.getElementById("accounts");
-            box.innerHTML = "";
+      async function loadAccounts() {
+        let res = await fetch("/accounts");
+        let data = await res.json();
+        let box = document.getElementById("accounts");
+        box.innerHTML = "";
 
-            // Add account button
-            let addBtn = document.createElement("a");
-            addBtn.href = "/login";
-            addBtn.innerHTML = "<button>Add Account</button>";
-            box.appendChild(addBtn);
+        // Add account button
+        let addBtn = document.createElement("a");
+        addBtn.href = "/login";
+        addBtn.innerHTML = "<button>Add Account</button>";
+        box.appendChild(addBtn);
 
-            // Show all accounts
-            data.accounts.forEach(phone => {
-                let div = document.createElement("div");
+        // Show all accounts
+        data.accounts.forEach((acc) => {
+          let div = document.createElement("div");
 
-                let btn = document.createElement("button");
-                btn.innerText = phone + (data.active === phone ? " (Active)" : "");
-                btn.onclick = () => switchAccount(phone);
-                div.appendChild(btn);
+          let btn = document.createElement("button");
+          btn.innerText =
+            acc.name + (data.active === acc.phone ? " (Active)" : "");
+          btn.onclick = () => switchAccount(acc.phone);
+          div.appendChild(btn);
 
-                let logoutBtn = document.createElement("button");
-                logoutBtn.innerText = "Logout";
-                logoutBtn.style.marginLeft = "10px";
-                logoutBtn.onclick = () => logoutAccount(phone);
-                div.appendChild(logoutBtn);
+          let logoutBtn = document.createElement("button");
+          logoutBtn.innerText = "Logout";
+          logoutBtn.style.marginLeft = "10px";
+          logoutBtn.onclick = () => logoutAccount(acc.phone);
+          div.appendChild(logoutBtn);
 
-                box.appendChild(div);
-            });
+          box.appendChild(div);
+        });
 
-            if (data.active) {
-                loadMessages(data.active);
-            }
+        if (data.active) {
+          loadMessages(data.active);
+        }
+      }
+
+      async function switchAccount(phone) {
+        await fetch("/switch/" + phone);
+        loadAccounts();
+      }
+
+      async function logoutAccount(phone) {
+        await fetch("/logout/" + phone);
+        loadAccounts();
+      }
+
+      async function loadMessages(phone) {
+        let res = await fetch("/messages/" + phone);
+        let data = await res.json();
+        let box = document.getElementById("messages");
+        box.innerHTML = "";
+
+        let refreshBtn = document.createElement("button");
+        refreshBtn.innerText = "Refresh Messages";
+        refreshBtn.onclick = () => loadMessages(phone);
+        box.appendChild(refreshBtn);
+
+        if (!data.chats || data.chats.length === 0) {
+          box.innerHTML += "<p>No messages found for this account.</p>";
+          return;
         }
 
-        async function switchAccount(phone) {
-            await fetch("/switch/" + phone);
-            loadAccounts();
-        }
+        data.chats.forEach((chat) => {
+          let div = document.createElement("div");
+          div.className = "chat";
 
-        async function logoutAccount(phone) {
-            await fetch("/logout/" + phone);
-            loadAccounts();
-        }
+          let title = document.createElement("h3");
+          title.innerText = chat.title;
+          div.appendChild(title);
 
-        async function loadMessages(phone) {
-            let res = await fetch("/messages/" + phone);
-            let data = await res.json();
-            let box = document.getElementById("messages");
-            box.innerHTML = "";
+          chat.messages.forEach((m) => {
+            let p = document.createElement("p");
+            p.innerText =
+              (m.sender || "Unknown") + ": " + (m.text || "[no text]");
+            div.appendChild(p);
+          });
 
-            let refreshBtn = document.createElement("button");
-            refreshBtn.innerText = "Refresh Messages";
-            refreshBtn.onclick = () => loadMessages(phone);
-            box.appendChild(refreshBtn);
+          box.appendChild(div);
+        });
+      }
 
-            if (!data.chats || data.chats.length === 0) {
-                box.innerHTML += "<p>No messages found for this account.</p>";
-                return;
-            }
-
-            data.chats.forEach(chat => {
-                let div = document.createElement("div");
-                div.className = "chat";
-
-                let title = document.createElement("h3");
-                title.innerText = chat.title;
-                div.appendChild(title);
-
-                chat.messages.forEach(m => {
-                    let p = document.createElement("p");
-                    p.innerText = (m.sender || "Unknown") + ": " + (m.text || "[no text]");
-                    div.appendChild(p);
-                });
-
-                box.appendChild(div);
-            });
-        }
-
-        window.onload = loadAccounts;
+      window.onload = loadAccounts;
     </script>
-</head>
-<body>
+  </head>
+  <body>
     <h2>Telegram Multi-Account Dashboard</h2>
     <div id="accounts" class="top-bar"></div>
-    <hr>
+    <hr />
     <div id="messages"></div>
-</body>
+  </body>
 </html>

@@ -128,7 +128,17 @@ async def logout(phone: str):
 # ---------- Account Management ----------
 @app.get("/accounts")
 async def get_accounts():
-    return {"accounts": list(clients.keys()), "active": active_account}
+    accounts = []
+    for phone, client in clients.items():
+        if not client.is_connected():
+            await client.connect()
+        me = await client.get_me()
+        display_name = (me.first_name or "") + (" " + me.last_name if me.last_name else "")
+        if not display_name.strip():
+            display_name = me.username or "Unknown"
+        accounts.append({"phone": phone, "name": display_name})
+
+    return {"accounts": accounts, "active": active_account}
 
 
 @app.get("/switch/{phone}")
